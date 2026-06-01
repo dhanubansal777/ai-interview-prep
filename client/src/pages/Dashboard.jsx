@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useUser, useAuth, UserButton } from '@clerk/clerk-react';
 import { Link } from 'react-router-dom';
-import { Sparkles, FileText } from 'lucide-react';
+import { Sparkles, FileText, ChevronRight } from 'lucide-react';
 import ResumeUpload from '../components/ResumeUpload';
 import api, { setAuthToken } from '../lib/api';
 
@@ -73,21 +73,28 @@ export default function Dashboard() {
                         <ul className="space-y-3">
                             {resumes.map((r) => (
                                 <li
-                                    key={r._id || r.id}
-                                    className="bg-white border rounded-xl p-4 flex items-center gap-4 hover:shadow-sm transition"
-                                >
-                                    <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center shrink-0">
-                                        <FileText className="w-5 h-5 text-indigo-600" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-medium text-slate-800 truncate">
-                                            {r.fileName}
-                                        </p>
-                                        <p className="text-sm text-slate-500">
-                                            Uploaded {new Date(r.createdAt).toLocaleDateString()}
-                                        </p>
-                                    </div>
-                                </li>
+  key={r._id || r.id}
+  className="bg-white border rounded-xl p-4 flex items-center gap-4 hover:shadow-sm transition"
+>
+  <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center shrink-0">
+    <FileText className="w-5 h-5 text-indigo-600" />
+  </div>
+  <div className="flex-1 min-w-0">
+    <p className="font-medium text-slate-800 truncate">
+      {r.fileName}
+    </p>
+    <p className="text-sm text-slate-500">
+      Uploaded {new Date(r.createdAt).toLocaleDateString()}
+    </p>
+  </div>
+  <Link
+    to={`/interview/${r._id || r.id}`}
+    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg flex items-center gap-1 shrink-0"
+  >
+    Start interview
+    <ChevronRight className="w-4 h-4" />
+  </Link>
+</li>
                             ))}
                         </ul>
                     )}

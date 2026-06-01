@@ -4,7 +4,7 @@ import Session from '../models/Session.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { callGemini } from '../services/gemini.service.js';
 import { buildQuestionGenPrompt } from '../prompts/questionGen.prompt.js';
-
+import { buildAnswerEvalPrompt } from '../prompts/answerEval.prompt.js';
 const router = express.Router();
 
 /**
@@ -93,6 +93,88 @@ router.get('/:id', requireAuth, async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
+});
+/**
+ * POST /api/sessions/:id/answer
+ * Body: { questionNumber, answer }
+ * Evaluates the user's answer using Gemini and saves it to the session.
+ */
+router.post('/:id/answer', requireAuth, async (req, res) => {
+  try {
+    const { questionNumber, answer } = req.body;
+
+    if (questionNumber === undefined || !answer) {
+      return res.status(400).json({ error: 'questionNumber and answer are required' });
+    }
+
+    if (answer.trim().length < 20) {
+      return res.status(400).json({ error: 'Answer too short. Please give a substantive response.' });
+    }
+
+    // Find the session — must belong to this user
+    const session = await Session.findOne({ _id: req.params.id, userId: req.userId });
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Find the question
+    const question = session.questions.find(q => q.questionNumber === questionNumber);
+    if (!question) {
+      return res.status(404).json({ error: 'Question not found in session' });
+    }
+
+    // Build the eval prompt
+    const prompt = buildAnswerEvalPrompt(
+      question.question,
+      question.expectedTopics,
+      answer,
+      session.role
+    );
+
+    console.log(`🤖 Evaluating answer for Q${questionNumber} (Session ${session._id})...`);
+    const evaluation = await callGemini(prompt);
+
+    if (!evaluation.scores || !evaluation.feedback || !evaluation.idealAnswer) {
+      return res.status(500).json({ error: 'AI returned invalid evaluation format' });
+    }
+
+    // Update the question with the user's answer and evaluation
+    question.userAnswer = answer;
+    question.scores = evaluation.scores;
+    question.feedback = evaluation.feedback;
+    question.idealAnswer = evaluation.idealAnswer;
+
+    // If all questions are answered, mark session complete + compute overall score
+    const allAnswered = session.questions.every(q => q.userAnswer && q.userAnswer.length > 0);
+    if (allAnswered) {
+      session.status = 'completed';
+      session.completedAt = new Date();
+      // Average all scores across all questions
+      const allScores = session.questions.flatMap(q => [
+        q.scores.content, q.scores.structure, q.scores.technicalDepth
+      ]);
+      session.overallScore = Math.round(
+        allScores.reduce((sum, s) => sum + s, 0) / allScores.length * 10
+      ) / 10;
+    }
+
+    await session.save();
+    console.log(`✅ Q${questionNumber} evaluated. Status: ${session.status}`);
+
+    res.json({
+      success: true,
+      evaluation: {
+        scores: evaluation.scores,
+        feedback: evaluation.feedback,
+        idealAnswer: evaluation.idealAnswer,
+      },
+      sessionStatus: session.status,
+      overallScore: session.overallScore,
+    });
+  } catch (err) {
+    console.error('Answer evaluation error:', err);
+    res.status(500).json({ error: err.message || 'Evaluation failed' });
+  }
 });
 
 export default router;

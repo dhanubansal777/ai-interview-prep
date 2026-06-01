@@ -4,6 +4,7 @@ import Landing from './pages/Landing';
 import Dashboard from './pages/Dashboard';
 import SignInPage from './pages/SignInPage';
 import SignUpPage from './pages/SignUpPage';
+import Interview from './pages/Interview';
 
 // Protects a route — only signed-in users can see it
 function ProtectedRoute({ children }) {
@@ -28,6 +29,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/interview/:resumeId"
+        element={
+          <ProtectedRoute>
+            <Interview />
           </ProtectedRoute>
         }
       />
