@@ -3,6 +3,9 @@ import multer from 'multer';
 import { PdfReader } from 'pdfreader';
 import Resume from '../models/Resume.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
+import { callGeminiWithSchema } from '../services/gemini.service.js';
+import { buildResumePdfPrompt, resumePdfSchema } from '../prompts/resumePdf.prompt.js';
+import { generatePdfFromHtml } from '../services/pdf.service.js';
 
 const router = express.Router();
 
@@ -78,6 +81,36 @@ router.get('/', requireAuth, async (req, res) => {
         res.json({ resumes });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/resumes/:resumeId/resume-pdf — generate an AI-tailored resume PDF
+router.post('/:resumeId/resume-pdf', requireAuth, async (req, res) => {
+    try {
+        const { jobDescription = '' } = req.body;
+
+        const resume = await Resume.findOne({ _id: req.params.resumeId, userId: req.userId });
+        if (!resume) {
+            return res.status(404).json({ error: 'Resume not found' });
+        }
+
+        const prompt = buildResumePdfPrompt(resume.extractedText, jobDescription);
+        const aiResponse = await callGeminiWithSchema(prompt, resumePdfSchema);
+
+        if (!aiResponse.html) {
+            return res.status(500).json({ error: 'AI returned invalid response format' });
+        }
+
+        const pdfBuffer = await generatePdfFromHtml(aiResponse.html);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="tailored-resume-${resume._id}.pdf"`,
+        });
+        res.send(pdfBuffer);
+    } catch (err) {
+        console.error('Resume PDF generation error:', err);
+        res.status(500).json({ error: err.message || 'Resume PDF generation failed' });
     }
 });
 

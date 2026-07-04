@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const resumeSchema = new mongoose.Schema({
     userId: {
-        type: String,        // Clerk user ID (e.g., "user_2ab3cd...")
+        type: String,        // Mongo User _id, as a string
         required: true,
         index: true          // Speeds up "find all resumes for user X" queries
     },

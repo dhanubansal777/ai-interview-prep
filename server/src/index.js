@@ -2,7 +2,8 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { clerkMiddleware } from '@clerk/express';
+import cookieParser from 'cookie-parser';
+import authRoutes from './routes/auth.routes.js';
 import resumeRoutes from './routes/resume.routes.js';
 import sessionRoutes from './routes/session.routes.js';
 dotenv.config();
@@ -15,23 +16,14 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
+app.use(cookieParser());
 
-// Clerk middleware — adds `req.auth()` to every request
-app.use(clerkMiddleware());
+app.use('/api/auth', authRoutes);
 app.use('/api/resumes', resumeRoutes);
 app.use('/api/sessions', sessionRoutes);
 // Test route (public — no auth required)
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', time: new Date() });
-});
-
-// Test route (protected — uses Clerk auth)
-app.get('/api/me', (req, res) => {
-    const { userId } = req.auth();
-    if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-    res.json({ userId, message: 'You are authenticated!' });
 });
 
 // Connect to MongoDB

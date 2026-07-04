@@ -80,6 +80,105 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/sessions/stats
+ * Returns aggregated analytics for the current user's completed sessions.
+ * NOTE: must be defined BEFORE the '/:id' route, or Express treats
+ * "stats" as an :id value and this never runs.
+ */
+router.get('/stats', requireAuth, async (req, res) => {
+    try {
+        const sessions = await Session.find({
+            userId: req.userId,
+            status: 'completed',
+        }).sort('createdAt'); // oldest → newest, for the trend line
+
+        // No completed interviews yet — return an empty-but-valid shape
+        if (sessions.length === 0) {
+            return res.json({
+                stats: {
+                    totalInterviews: 0,
+                    averageScore: 0,
+                    bestScore: 0,
+                    dimensions: { content: 0, structure: 0, technicalDepth: 0 },
+                    byRole: [],
+                    trend: [],
+                },
+            });
+        }
+
+        // --- Helper: average a list of numbers, rounded to 1 decimal ---
+        const avg = (arr) =>
+            arr.length ? Math.round((arr.reduce((s, n) => s + n, 0) / arr.length) * 10) / 10 : 0;
+
+        // --- Collect every per-question score across all sessions ---
+        const allContent = [];
+        const allStructure = [];
+        const allDepth = [];
+        const overallScores = [];
+        const roleBuckets = {}; // { SDE: [scores...], Data: [...] }
+        const trend = [];
+
+        sessions.forEach((s, i) => {
+            const sContent = [];
+            const sStructure = [];
+            const sDepth = [];
+
+            s.questions.forEach((q) => {
+                if (!q.scores) return;
+                allContent.push(q.scores.content);
+                allStructure.push(q.scores.structure);
+                allDepth.push(q.scores.technicalDepth);
+                sContent.push(q.scores.content);
+                sStructure.push(q.scores.structure);
+                sDepth.push(q.scores.technicalDepth);
+            });
+
+            // Per-session overall (mirror the same math used on the results page)
+            const sessionScore =
+                s.overallScore ??
+                avg([...sContent, ...sStructure, ...sDepth]);
+            overallScores.push(sessionScore);
+
+            // Bucket by role
+            if (!roleBuckets[s.role]) roleBuckets[s.role] = [];
+            roleBuckets[s.role].push(sessionScore);
+
+            // Trend point
+            trend.push({
+                interview: i + 1, // 1-based index for the x-axis
+                score: sessionScore,
+                role: s.role,
+                date: s.completedAt || s.createdAt,
+            });
+        });
+
+        const byRole = Object.entries(roleBuckets).map(([role, scores]) => ({
+            role,
+            score: avg(scores),
+            count: scores.length,
+        }));
+
+        res.json({
+            stats: {
+                totalInterviews: sessions.length,
+                averageScore: avg(overallScores),
+                bestScore: Math.max(...overallScores),
+                dimensions: {
+                    content: avg(allContent),
+                    structure: avg(allStructure),
+                    technicalDepth: avg(allDepth),
+                },
+                byRole,
+                trend,
+            },
+        });
+    } catch (err) {
+        console.error('Stats error:', err);
+        res.status(500).json({ error: err.message || 'Failed to compute stats' });
+    }
+});
+
+/**
  * GET /api/sessions/:id
  * Returns a single session with all questions and answers.
  */

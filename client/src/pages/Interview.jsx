@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useAuth, UserButton } from '@clerk/clerk-react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Sparkles, Briefcase, Cpu, BarChart3, Layout, Server,
   ChevronRight, Loader2, CheckCircle2, ArrowLeft, Award
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import api, { setAuthToken } from '../lib/api';
-
+import api from '../lib/api';
+import { useSpeechRecognition, speakText } from '../hooks/useVoice';
+import { Mic, MicOff, Volume2 } from 'lucide-react';
 const ROLES = [
   { id: 'SDE', label: 'Software Engineer', icon: Cpu },
   { id: 'Data', label: 'Data Analyst', icon: BarChart3 },
@@ -20,7 +20,6 @@ const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
 
 export default function Interview() {
   const { resumeId } = useParams();
-  const { getToken } = useAuth();
   const navigate = useNavigate();
 
   const [stage, setStage] = useState('setup'); // setup → questions → results
@@ -33,12 +32,18 @@ export default function Interview() {
   const [evaluating, setEvaluating] = useState(false);
   const [evaluations, setEvaluations] = useState({}); // { 1: {...}, 2: {...}, ... }
 
+  // ---------- Voice mode (speech-to-text) ----------
+  const { isListening, transcript, isSupported, startListening, stopListening } = useSpeechRecognition();
+
+  // push spoken words into the answer box
+  useEffect(() => {
+    if (transcript) setAnswer(transcript);
+  }, [transcript]);
+
   // ---------- Start the session ----------
   const handleStart = async () => {
     setLoading(true);
     try {
-      const token = await getToken();
-      setAuthToken(token);
       const { data } = await api.post('/sessions/start', {
         resumeId,
         role,
@@ -60,10 +65,10 @@ export default function Interview() {
       toast.error('Please write a more detailed answer (at least 20 chars)');
       return;
     }
+    // stop the mic if it's still listening when they submit
+    if (isListening) stopListening();
     setEvaluating(true);
     try {
-      const token = await getToken();
-      setAuthToken(token);
       const { data } = await api.post(`/sessions/${session.id}/answer`, {
         questionNumber: session.questions[currentQ].questionNumber,
         answer,
@@ -99,7 +104,6 @@ export default function Interview() {
           <Sparkles className="w-6 h-6 text-indigo-600" />
           <span className="font-bold text-xl">InterviewAce</span>
         </Link>
-        <UserButton afterSignOutUrl="/" />
       </nav>
 
       <main className="max-w-3xl mx-auto px-6 py-12">
@@ -191,9 +195,19 @@ export default function Interview() {
             </div>
 
             <div className="bg-white border rounded-xl p-6 mb-6">
-              <h2 className="text-xl font-semibold mb-4">
-                {session.questions[currentQ].question}
-              </h2>
+              <div className="flex justify-between items-start gap-4 mb-4">
+                <h2 className="text-xl font-semibold">
+                  {session.questions[currentQ].question}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => speakText(session.questions[currentQ].question)}
+                  className="shrink-0 inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800"
+                  title="Read the question aloud"
+                >
+                  <Volume2 size={16} /> Hear question
+                </button>
+              </div>
               <div className="text-sm text-slate-500">
                 <span className="font-medium">Hint — cover these topics:</span>{' '}
                 {session.questions[currentQ].expectedTopics.join(', ')}
@@ -207,8 +221,29 @@ export default function Interview() {
               className="w-full h-48 p-4 border-2 border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none resize-none"
               disabled={evaluating}
             />
-            <div className="text-xs text-slate-500 text-right mt-1">
-              {answer.length} characters
+            <div className="flex justify-between items-center mt-1">
+              {/* Voice input toggle */}
+              {isSupported ? (
+                <button
+                  type="button"
+                  onClick={isListening ? stopListening : startListening}
+                  disabled={evaluating}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 ${
+                    isListening
+                      ? 'bg-red-500 text-white hover:bg-red-600'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+                  {isListening ? 'Stop & use answer' : 'Answer with voice'}
+                </button>
+              ) : (
+                <span className="text-xs text-slate-500">Voice input needs Chrome or Edge.</span>
+              )}
+
+              <div className="text-xs text-slate-500">
+                {answer.length} characters
+              </div>
             </div>
 
             <button

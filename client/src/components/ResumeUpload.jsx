@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { useAuth } from '@clerk/clerk-react';
 import { Upload, FileText, Loader2, X, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import api, { setAuthToken } from '../lib/api';
+import api from '../lib/api';
 
 export default function ResumeUpload({ onUploaded }) {
-    const { getToken } = useAuth();
     const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
 
@@ -29,10 +27,6 @@ export default function ResumeUpload({ onUploaded }) {
 
         setUploading(true);
         try {
-            // Get the Clerk JWT and attach it to axios
-            const token = await getToken();
-            setAuthToken(token);
-
             // Build form data
             const formData = new FormData();
             formData.append('resume', file);
