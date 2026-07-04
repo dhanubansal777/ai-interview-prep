@@ -10,6 +10,10 @@ dotenv.config();
 
 const app = express();
 
+// Render sits behind a proxy — needed so Express reports the connection as
+// secure (required for the `secure` cookie flag to actually get set).
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors({
     origin: process.env.CLIENT_URL || 'http://localhost:5173',

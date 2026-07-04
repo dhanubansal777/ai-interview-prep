@@ -3,10 +3,15 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import BlacklistToken from '../models/BlacklistToken.js';
 
+// In production the frontend (Vercel) and backend (Render) are different
+// sites, so the auth cookie needs SameSite=None to be sent on cross-site
+// requests — which browsers only allow when the cookie is also Secure.
+const isProduction = process.env.NODE_ENV === 'production';
+
 const COOKIE_OPTIONS = {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    sameSite: isProduction ? 'none' : 'lax',
+    secure: isProduction,
     maxAge: 24 * 60 * 60 * 1000, // 1 day, matches JWT expiresIn
 };
 
