@@ -3,8 +3,6 @@ FROM ghcr.io/puppeteer/puppeteer:24.11.2
 WORKDIR /app
 
 USER root
-ENV PUPPETEER_SKIP_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY . .
